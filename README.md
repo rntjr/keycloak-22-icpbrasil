@@ -1,20 +1,7 @@
 ICP-Brasil Authenticator - Keycloak v19.0.3+
 ===================================================
 
-Versão com suporte ao keycloak 19.0.3 (e talvez posteriores), está sendo disponibilizado para coletar feedback, uma vez que 
-eu não possuo um certificado ICP para testes.
-
-[[ATENÇÃO]]
-[[ATENÇÃO]]
-[[ATENÇÃO]]
-
-ESTE SOFTWARE VEM SEM NENHUMA GARANTIA DE FUNCIONAMENTO OU DE SUPORTE. Caso encontre algum problema com ele, eu posso 
-tentar ajudar, no meu próprio tempo e no meu próprio limite, caso você abra uma issue, mas ISSO NÃO É GARANTIA 
-NENHUMA DE QUE VOCÊ VAI SER RESPONDIDO.
-
-[[ATENÇÃO]]
-[[ATENÇÃO]]
-[[ATENÇÃO]]
+Versão com suporte ao keycloak 22+.
 
 1. Necessário configurar o keycloak para autenticação mutual-tls (mTLS). Isso vai depender do proxy reverso que estiver
 na frente do Keycloak ou do próprio keycloak.

@@ -18,10 +18,10 @@
 
 package org.keycloak.authentication.authenticators.icpbrasil;
 
-import org.keycloak.authentication.authenticators.x509.OCSPUtils;
+import org.keycloak.common.crypto.CryptoIntegration;
 import org.keycloak.models.KeycloakSession;
 import org.keycloak.services.ServicesLogger;
-import org.keycloak.utils.CRLUtils;
+import org.keycloak.utils.OCSPProvider;
 
 import javax.naming.Context;
 import javax.naming.NamingException;
@@ -29,29 +29,13 @@ import javax.naming.directory.Attribute;
 import javax.naming.directory.Attributes;
 import javax.naming.directory.DirContext;
 import javax.naming.directory.InitialDirContext;
-import java.io.ByteArrayInputStream;
-import java.io.DataInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.File;
-import java.io.FileInputStream;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLConnection;
 import java.security.GeneralSecurityException;
-import java.security.cert.CertPathValidatorException;
-import java.security.cert.CertificateFactory;
-import java.security.cert.X509CRL;
-import java.security.cert.X509Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CRLException;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Hashtable;
-import java.util.List;
-import java.util.Set;
-import java.util.LinkedList;
-import java.util.ArrayList;
+import java.security.cert.*;
+import java.util.*;
 
 /**
  * @author <a href="mailto:pnalyvayko@agi.com">Peter Nalyvayko</a>
@@ -83,7 +67,7 @@ public class CertificateValidator {
 
             if (value < 0 || value > 8)
                 throw new IllegalArgumentException("value");
-            if (name == null || name.trim().length() == 0)
+            if (name == null || name.trim().isEmpty())
                 throw new IllegalArgumentException("name");
             this.value = value;
             this.name = name.trim();
@@ -93,7 +77,7 @@ public class CertificateValidator {
         public String getName() {  return this.name; }
 
         static public KeyUsageBits parse(String name) throws IllegalArgumentException, IndexOutOfBoundsException {
-            if (name == null || name.trim().length() == 0)
+            if (name == null || name.trim().isEmpty())
                 throw new IllegalArgumentException("name");
 
             for (KeyUsageBits bit : KeyUsageBits.values()) {
@@ -137,7 +121,7 @@ public class CertificateValidator {
          * @param issuerCertificate The issuer certificate
          * @return revocation status
          */
-        public abstract OCSPUtils.OCSPRevocationStatus check(X509Certificate cert, X509Certificate issuerCertificate) throws CertPathValidatorException;
+        public abstract OCSPProvider.OCSPRevocationStatus check(X509Certificate cert, X509Certificate issuerCertificate) throws CertPathValidatorException;
     }
 
     public static abstract class CRLLoaderImpl {
@@ -160,10 +144,10 @@ public class CertificateValidator {
         }
 
         @Override
-        public OCSPUtils.OCSPRevocationStatus check(X509Certificate cert, X509Certificate issuerCertificate) throws CertPathValidatorException {
-
-            OCSPUtils.OCSPRevocationStatus ocspRevocationStatus = null;
-            if (responderUri == null || responderUri.trim().length() == 0) {
+        public OCSPProvider.OCSPRevocationStatus check(X509Certificate cert, X509Certificate issuerCertificate) throws CertPathValidatorException {
+            OCSPProvider ocspProvider = CryptoIntegration.getProvider().getOCSPProver(OCSPProvider.class);
+            OCSPProvider.OCSPRevocationStatus ocspRevocationStatus = null;
+            if (responderUri == null || responderUri.trim().isEmpty()) {
                 // Obtains revocation status of a certificate using OCSP and assuming
                 // most common defaults. If responderUri is not specified,
                 // then OCS responder URI is retrieved from the
@@ -174,7 +158,7 @@ public class CertificateValidator {
                 // 2) Includes the value of OCSPsigning in ExtendedKeyUsage v3 extension
                 // 3) Certificate is valid at the time
 
-                ocspRevocationStatus = OCSPUtils.check(keycloakSession, cert, issuerCertificate);
+                ocspRevocationStatus = ocspProvider.check(keycloakSession, cert, issuerCertificate);
             }
             else {
                 URI uri;
@@ -189,7 +173,7 @@ public class CertificateValidator {
                 // OCSP responder's certificate is assumed to be the issuer's certificate
                 // certificate.
                 // responderUri overrides the contents (if any) of the certificate's AIA extension
-                ocspRevocationStatus = OCSPUtils.check(keycloakSession, cert, issuerCertificate, uri, null, null);
+                ocspRevocationStatus = ocspProvider.check(keycloakSession, cert, issuerCertificate, uri, null, null);
             }
             return ocspRevocationStatus;
         }
@@ -449,16 +433,16 @@ public class CertificateValidator {
             logger.debugf("Certificate: %s", cert.getSubjectDN().getName());
         }
 
-        OCSPUtils.OCSPRevocationStatus rs = ocspChecker.check(certs[0], certs[1]);
+        OCSPProvider.OCSPRevocationStatus rs = ocspChecker.check(certs[0], certs[1]);
 
         if (rs == null) {
             throw new GeneralSecurityException("Unable to check client revocation status using OCSP");
         }
 
-        if (rs.getRevocationStatus() == OCSPUtils.RevocationStatus.UNKNOWN) {
+        if (rs.getRevocationStatus() == OCSPProvider.RevocationStatus.UNKNOWN) {
             throw new GeneralSecurityException("Unable to determine certificate's revocation status.");
         }
-        else if (rs.getRevocationStatus() == OCSPUtils.RevocationStatus.REVOKED) {
+        else if (rs.getRevocationStatus() == OCSPProvider.RevocationStatus.REVOKED) {
 
             StringBuilder sb = new StringBuilder();
             sb.append("Certificate's been revoked.");
@@ -485,7 +469,7 @@ public class CertificateValidator {
     }
     private static List<String> getCRLDistributionPoints(X509Certificate cert) {
         try {
-            return CRLUtils.getCRLDistributionPoints(cert);
+            return CryptoIntegration.getProvider().getCertificateUtils().getCRLDistributionPoints(cert);
         }
         catch(IOException e) {
             logger.error(e.getMessage());
@@ -496,7 +480,7 @@ public class CertificateValidator {
     private static void checkRevocationStatusUsingCRLDistributionPoints(X509Certificate[] certs) throws GeneralSecurityException {
 
         List<String> distributionPoints = getCRLDistributionPoints(certs[0]);
-        if (distributionPoints == null || distributionPoints.size() == 0) {
+        if (distributionPoints == null || distributionPoints.isEmpty()) {
             throw new GeneralSecurityException("Could not find any CRL distribution points in the certificate, unable to check the certificate revocation status using CRL/DP.");
         }
         for (String dp : distributionPoints) {

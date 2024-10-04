@@ -19,6 +19,8 @@
 package org.keycloak.authentication.authenticators.icpbrasil;
 
 import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.models.KeycloakSession;
@@ -55,11 +57,12 @@ public abstract class UserIdentityToModelMapper {
         @Override
         public UserModel find(AuthenticationFlowContext context, Object userIdentity) throws Exception {
             KeycloakSession session = context.getSession();
-            List<UserModel> users = session.users().searchForUserByUserAttribute(_customAttribute, userIdentity.toString(), context.getRealm());
-            if (users != null && users.size() > 1) {
+            Stream<UserModel> usersStream = session.users().searchForUserByUserAttributeStream(context.getRealm(), _customAttribute, userIdentity.toString());
+            List<UserModel> users = usersStream.collect(Collectors.toList());
+            if (users.size() > 1) {
                 throw new ModelDuplicateException();
             }
-            return users != null && users.size() == 1 ? users.get(0) : null;
+            return users.size() == 1 ? users.get(0) : null;
         }
     }
 

@@ -25,12 +25,12 @@ import java.security.cert.X509Certificate;
 import java.util.Collection;
 import java.util.function.Function;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x500.style.BCStyle;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateHolder;
-import org.bouncycastle.x509.extension.X509ExtensionUtil;
+import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils;
 import org.keycloak.authentication.AuthenticationFlowContext;
 import org.keycloak.authentication.Authenticator;
 import org.keycloak.forms.login.LoginFormsProvider;
@@ -124,7 +124,7 @@ public abstract class AbstractICPBrasilClientCertificateAuthenticator implements
 
         private static final Function<X509Certificate[],Collection<?>> subjectAlternativeNames = certs -> {
             try {
-                return X509ExtensionUtil.getSubjectAlternativeNames(certs[0]);
+                return JcaX509ExtensionUtils.getSubjectAlternativeNames(certs[0]);
             } catch (CertificateParsingException e) {
                 logger.warn("Unable to get certificate Subject Alternative Names", e);
             }
